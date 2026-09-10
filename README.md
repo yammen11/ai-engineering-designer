@@ -4,6 +4,11 @@ Erster kleiner, sauber strukturierter Prototyp:
 
 **PDF + STEP + Benutzerwunsch → 1 Engineering Agent → strukturierte CAD-Anweisung → CadQuery/OpenCascade → STEP-Datei → interaktive 3D-Anzeige**
 
+Zusätzlich steht ein separates **Generic Data Model in Pydantic v2** unter
+`aied.models` bereit. Datenverträge und Testbefehle: [Generic Data Model](docs/GENERIC_DATA_MODEL.md).
+Ein [synthetisches JSON-Beispiel](examples/generic_project.json) zeigt die Verwendung.
+Der bestehende v0.1-Workflow verwendet weiterhin unverändert `aied.schemas`.
+
 ## Warum diese Architektur?
 
 Das LLM schreibt **nicht direkt rohe STEP-Geometrie**. Es liefert eine kontrollierte, strukturierte CAD-Anweisung. Die reale Geometrie wird deterministisch durch Python + CadQuery/OpenCascade erzeugt.

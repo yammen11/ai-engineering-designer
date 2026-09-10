@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0",
+  "id": "assembly-example",
+  "name": "Synthetisches Datenmodell-Beispiel",
+  "metadata": {
+    "purpose": {
+      "status": "known",
+      "value": "Veranschaulicht Datenverträge, keine geprüfte Montageplanung."
+    }
+  },
+  "product": {
+    "id": "product-1",
+    "components": [
+      {
+        "id": "base-plate",
+        "name": "Grundplatte",
+        "geometry": [{"id": "base-cad", "uri": "base_plate.step", "format": "step"}]
+      },
+      {
+        "id": "bracket",
+        "name": "Winkelhalterung",
+        "geometry": [{"id": "bracket-cad", "uri": "bracket.step", "format": "step"}]
+      },
+      {"id": "screw", "name": "Schraube", "quantity": 2}
+    ],
+    "assembly_relations": [
+      {
+        "id": "bracket-on-base",
+        "parent_component_id": "base-plate",
+        "child_component_id": "bracket",
+        "relation_type": "mounted_on"
+      }
+    ]
+  },
+  "process": {
+    "id": "process-1",
+    "operations": [
+      {
+        "id": "tighten-screws",
+        "name": "Zwei Schrauben anziehen",
+        "component_ids": ["base-plate", "bracket", "screw"],
+        "capability_requirements": [
+          {
+            "id": "screwing-needed",
+            "capability": "screwing",
+            "properties": {"torque": {"status": "unknown", "unit": "N*m"}}
+          }
+        ]
+      }
+    ]
+  },
+  "resources": [
+    {
+      "id": "tool-1",
+      "name": "Beispiel-Schraubwerkzeug",
+      "asset_type": "screwdriver",
+      "capabilities": {"screwing": {"torque": {"status": "unknown", "unit": "N*m"}}},
+      "sources": [{"id": "example-source", "kind": "example", "description": "Synthetischer Datensatz"}]
+    }
+  ],
+  "automation_concepts": [
+    {
+      "id": "concept-1",
+      "process_id": "process-1",
+      "asset_requirements": [
+        {
+          "id": "tool-needed",
+          "role": "screwing_resource",
+          "operation_ids": ["tighten-screws"],
+          "capability_requirements": [{"id": "tool-screwing", "capability": "screwing"}]
+        }
+      ],
+      "resource_assignments": [
+        {
+          "id": "assignment-1",
+          "asset_requirement_id": "tool-needed",
+          "asset_id": "tool-1",
+          "operation_ids": ["tighten-screws"],
+          "match_result": {
+            "requirement_id": "tool-needed",
+            "asset_id": "tool-1",
+            "status": "unknown",
+            "reason": "Drehmomentanforderung und Werkzeugdaten fehlen."
+          }
+        }
+      ],
+      "layout_plan": {
+        "id": "layout-1",
+        "scene_objects": [
+          {
+            "id": "base-occurrence",
+            "entity_type": "component",
+            "entity_id": "base-plate",
+            "pose": {"translation_mm": [0, 0, 0], "rotation_deg": [0, 0, 0], "frame_id": "world"}
+          },
+          {"id": "tool-occurrence", "entity_type": "asset", "entity_id": "tool-1", "pose": null}
+        ]
+      }
+    }
+  ]
+}

@@ -3,11 +3,14 @@
 from .data import DataStatus, DataValue, GeometryReference, SourceReference
 from .engineering import (
     AssemblyRelation,
+    AssetInterface,
     AssetRequirement,
     AutomationConcept,
     CanonicalAsset,
+    Capability,
     CapabilityRequirement,
     Component,
+    Constraint,
     EngineeringProject,
     MatchResult,
     MatchStatus,
@@ -19,8 +22,8 @@ from .engineering import (
 from .spatial import LayoutPlan, Pose, SceneObject
 
 __all__ = [
-    "AssemblyRelation", "AssetRequirement", "AutomationConcept", "CanonicalAsset",
-    "CapabilityRequirement", "Component", "DataStatus", "DataValue",
+    "AssemblyRelation", "AssetInterface", "AssetRequirement", "AutomationConcept", "CanonicalAsset",
+    "Capability", "CapabilityRequirement", "Component", "Constraint", "DataStatus", "DataValue",
     "EngineeringProject", "GeometryReference", "LayoutPlan", "MatchResult",
     "MatchStatus", "Operation", "Pose", "Process", "Product",
     "ResourceAssignment", "SceneObject", "SourceReference",

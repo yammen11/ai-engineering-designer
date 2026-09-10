@@ -46,10 +46,61 @@ class Product(EngineeringObject):
         return self
 
 
-class CapabilityRequirement(EngineeringObject):
-    """Required capability and properties; no implied comparison/matching rule."""
+class Capability(EngineeringObject):
+    """Open capability type with qualified parameters and inherited provenance."""
 
     capability: NonEmptyString
+    parameters: dict[NonEmptyString, DataValue] = Field(default_factory=dict)
+
+
+class Constraint(EngineeringObject):
+    """Requirement on a property, identified by local and/or semantic reference.
+
+    Value, unit and knowledge state live together in DataValue. References are
+    labels, not resolved paths. This validates the operand shape, not a match.
+    """
+
+    property_ref: NonEmptyString | None = None
+    semantic_ref: NonEmptyString | None = None
+    operator: Literal["=", "!=", ">", ">=", "<", "<=", "between", "in", "contains"]
+    value: DataValue
+    strength: Literal["hard", "soft"] = "hard"
+
+    @model_validator(mode="after")
+    def validate_operand(self) -> Self:
+        if self.property_ref is None and self.semantic_ref is None:
+            raise ValueError("A constraint requires property_ref or semantic_ref")
+        operand = self.value.value
+        if operand is None:
+            # Unknown/not_applicable are valid data states, never a failed match.
+            return self
+        if self.operator == "between":
+            if (
+                not isinstance(operand, list) or len(operand) != 2
+                or any(type(bound) not in (int, float) for bound in operand)
+            ):
+                raise ValueError("between requires two numeric bounds [lower, upper]")
+            if operand[0] > operand[1]:
+                raise ValueError("between requires lower <= upper")
+        elif self.operator == "in":
+            if not isinstance(operand, list) or not operand:
+                raise ValueError("in requires a non-empty list of alternatives")
+        elif self.operator in {">", ">=", "<", "<="}:
+            if type(operand) not in (int, float):
+                raise ValueError("Ordered comparisons require a numeric operand")
+        return self
+
+
+class CapabilityRequirement(EngineeringObject):
+    """Required capability, properties and constraints; no matching engine."""
+
+    capability: NonEmptyString
+    constraints: list[Constraint] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_constraints(self) -> Self:
+        unique_ids((item.id for item in self.constraints), "capability_requirement.constraints")
+        return self
 
 
 class Operation(EngineeringObject):
@@ -85,24 +136,40 @@ class AssetRequirement(EngineeringObject):
     quantity: StrictInt = Field(default=1, gt=0)
     capability_requirements: list[CapabilityRequirement] = Field(default_factory=list)
     operation_ids: list[NonEmptyString] = Field(default_factory=list)
+    constraints: list[Constraint] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_links(self) -> Self:
         unique_ids(self.operation_ids, "asset_requirement.operation_ids")
         unique_ids((item.id for item in self.capability_requirements), "asset_requirement.capability_requirements")
+        unique_ids((item.id for item in self.constraints), "asset_requirement.constraints")
         return self
 
 
-class CanonicalAsset(EngineeringObject):
-    """Source-independent resource, with open capability names and properties.
+class AssetInterface(EngineeringObject):
+    """Open interface category/standard; technical details live in properties.
 
-    Example capabilities: {"handling": {"payload": DataValue(...)}}.
-    An empty capability property map states no quantitative performance.
+    Categories may be mechanical, electrical, communication, pneumatic,
+    hydraulic, software or any future type. No compatibility is inferred.
     """
 
+    interface_type: NonEmptyString
+    standard: NonEmptyString | None = None
+
+
+class CanonicalAsset(EngineeringObject):
+    """Source-independent resource with explicit capabilities and interfaces."""
+
     asset_type: NonEmptyString | None = None
-    capabilities: dict[NonEmptyString, dict[NonEmptyString, DataValue]] = Field(default_factory=dict)
+    capabilities: list[Capability] = Field(default_factory=list)
+    interfaces: list[AssetInterface] = Field(default_factory=list)
     geometry: list[GeometryReference] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_structure(self) -> Self:
+        unique_ids((item.id for item in self.capabilities), "asset.capabilities")
+        unique_ids((item.id for item in self.interfaces), "asset.interfaces")
+        return self
 
 
 class MatchStatus(str, Enum):
@@ -160,11 +227,11 @@ class AutomationConcept(EngineeringObject):
 class EngineeringProject(EngineeringObject):
     """Growing PPR document; absent sections are allowed, dangling IDs are not.
 
-    Version 1.0 is this data contract's version, not the application version.
+    Version 1.1 is this data contract's version, not the application version.
     Validation checks structure/references, never engineering feasibility.
     """
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.1"] = "1.1"
     metadata: dict[NonEmptyString, DataValue] = Field(default_factory=dict)
     product: Product | None = None
     process: Process | None = None

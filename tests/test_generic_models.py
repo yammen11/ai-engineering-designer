@@ -15,7 +15,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from aied import models
 from aied.models import (
-    AssetRequirement, CanonicalAsset, Component, DataStatus, DataValue,
+    AssetInterface, AssetRequirement, CanonicalAsset, Capability,
+    CapabilityRequirement, Component, Constraint, DataStatus, DataValue,
     EngineeringProject, MatchResult, MatchStatus, Pose, SourceReference,
 )
 
@@ -114,7 +115,10 @@ class GenericModelTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 asset = CanonicalAsset(
                     id="asset", asset_type=kind,
-                    capabilities={"custom_future_capability": {"custom_measure": DataValue(status="estimated", value=3)}},
+                    capabilities=[Capability(
+                        id="custom-cap", capability="custom_future_capability",
+                        parameters={"custom_measure": DataValue(status="estimated", value=3)},
+                    )],
                     properties={"vendor:custom_flag": DataValue(status="known", value=False)},
                 )
                 self.assertEqual(CanonicalAsset.model_validate_json(asset.model_dump_json()), asset)
@@ -210,6 +214,9 @@ class ReferenceTests(unittest.TestCase):
     def test_duplicate_owned_ids_are_rejected(self):
         paths = (
             ("product", "components"), ("product", "assembly_relations"),
+            ("resources", 0, "capabilities"), ("resources", 0, "interfaces"),
+            ("process", "operations", 0, "capability_requirements", 0, "constraints"),
+            ("automation_concepts", 0, "asset_requirements", 0, "constraints"),
             ("process", "operations"), ("process", "operations", 0, "capability_requirements"),
             ("resources",), ("automation_concepts",),
             ("automation_concepts", 0, "asset_requirements"),
@@ -243,6 +250,115 @@ class ReferenceTests(unittest.TestCase):
             payload["automation_concepts"][0]["resource_assignments"][0]["match_result"][field] = "different"
             with self.subTest(field=field), self.assertRaises(ValidationError):
                 EngineeringProject.model_validate(payload)
+
+
+class StabilizationTests(unittest.TestCase):
+    def test_confidence_is_optional_bounded_and_preserves_states(self):
+        self.assertIsNone(DataValue().confidence)
+        for state in DataStatus:
+            value = None if state in {DataStatus.UNKNOWN, DataStatus.NOT_APPLICABLE} else 5
+            for confidence in (None, 0, 0.5, 1):
+                with self.subTest(state=state, confidence=confidence):
+                    item = DataValue(status=state, value=value, confidence=confidence)
+                    self.assertEqual(DataValue.model_validate_json(item.model_dump_json()), item)
+        for confidence in (-0.01, 1.01, True, "0.5", float("nan"), float("inf")):
+            with self.subTest(confidence=confidence), self.assertRaises(ValidationError):
+                DataValue(confidence=confidence)
+        result = MatchResult(requirement_id="r", asset_id="a", evidence={"x": DataValue(confidence=1)})
+        self.assertEqual(result.status, MatchStatus.UNKNOWN)
+
+    def test_capabilities_and_interfaces_preserve_open_types_and_provenance(self):
+        source = SourceReference(id="s", kind="example")
+        capability = Capability(
+            id="c", capability="future:ability", name="Example capability",
+            semantic_id="urn:example:cap", description="Synthetic capability",
+            sources=[source], parameters={"x": DataValue(status="derived", value=4, confidence=0.8)},
+        )
+        kinds = ("mechanical", "electrical", "communication", "pneumatic", "hydraulic", "software", "future:interface")
+        interfaces = [AssetInterface(
+            id=kind, interface_type=kind, standard="future:standard",
+            semantic_id="urn:example:interface", sources=[source],
+            properties={"custom": DataValue(status="known", value={"enabled": True})},
+        ) for kind in kinds]
+        asset = CanonicalAsset(id="a", capabilities=[capability], interfaces=interfaces)
+        self.assertEqual(CanonicalAsset.model_validate_json(asset.model_dump_json()), asset)
+        for model, field in ((Capability, "capability"), (AssetInterface, "interface_type")):
+            for value in ("", "   ", None):
+                with self.subTest(model=model, value=value), self.assertRaises(ValidationError):
+                    model.model_validate({"id": "x", field: value})
+
+    def test_all_constraint_operators_round_trip(self):
+        operands = {"=": False, "!=": "x", ">": 1, ">=": 0, "<": 5, "<=": 4,
+                    "between": [1, 4], "in": ["a", "b"], "contains": "feature"}
+        for operator, operand in operands.items():
+            for strength in ("hard", "soft"):
+                with self.subTest(operator=operator, strength=strength):
+                    constraint = Constraint(
+                        id="c", property_ref="custom", semantic_ref="urn:example:custom",
+                        operator=operator, strength=strength,
+                        value=DataValue(status="known", value=operand, unit="custom_unit"),
+                    )
+                    self.assertEqual(Constraint.model_validate_json(constraint.model_dump_json()), constraint)
+
+    def test_constraint_requires_reference_operator_and_qualified_value(self):
+        base = {"id": "c", "property_ref": "mass", "operator": "<=",
+                "value": {"status": "known", "value": 2, "unit": "kg"}}
+        self.assertEqual(Constraint.model_validate(base).strength, "hard")
+        semantic_only = dict(base, semantic_ref="urn:example:mass")
+        semantic_only.pop("property_ref")
+        self.assertEqual(Constraint.model_validate(semantic_only).semantic_ref, "urn:example:mass")
+        invalid = [dict(base, property_ref=None), dict(base, property_ref=" "),
+                   dict(base, semantic_ref=""), dict(base, operator="equals"),
+                   dict(base, strength="mandatory"), dict(base, value=2)]
+        for missing in ("operator", "value"):
+            payload = dict(base)
+            payload.pop(missing)
+            invalid.append(payload)
+        for payload in invalid:
+            with self.subTest(payload=payload), self.assertRaises(ValidationError):
+                Constraint.model_validate(payload)
+
+    def test_constraint_operand_shapes_are_checked_without_matching(self):
+        for operator, operand in (("between", [2, 1]), ("between", [1]),
+                                  ("between", [True, 2]), ("between", ["1", "2"]),
+                                  ("in", []), ("in", "a"), (">", True), ("<=", "2")):
+            with self.subTest(operator=operator, operand=operand), self.assertRaises(ValidationError):
+                Constraint(id="c", property_ref="x", operator=operator,
+                           value=DataValue(status="known", value=operand))
+        for operator in ("between", "in", ">", "contains"):
+            for state in ("unknown", "not_applicable"):
+                item = Constraint(id="c", property_ref="x", operator=operator, value=DataValue(status=state))
+                self.assertEqual(Constraint.model_validate_json(item.model_dump_json()), item)
+
+    def test_nested_revalidation_and_independent_defaults(self):
+        first = CanonicalAsset(id="a")
+        second = CanonicalAsset(id="b")
+        first.interfaces.append(AssetInterface(id="i", interface_type="software"))
+        first.capabilities.append(Capability(id="c", capability="custom"))
+        self.assertEqual(second.interfaces, [])
+        self.assertEqual(second.capabilities, [])
+        left, right = Capability(id="l", capability="x"), Capability(id="r", capability="x")
+        left.parameters["x"] = DataValue()
+        self.assertEqual(right.parameters, {})
+        for model, kwargs in ((AssetRequirement, {}), (CapabilityRequirement, {"capability": "x"})):
+            a, b = model(id="a", **kwargs), model(id="b", **kwargs)
+            a.constraints.append(Constraint(id="c", property_ref="x", operator="=", value=DataValue()))
+            self.assertEqual(b.constraints, [])
+        project = EngineeringProject.model_validate(example_payload())
+        project.resources[0].interfaces[1].properties["voltage"].confidence = 2
+        with self.assertRaises(ValidationError):
+            EngineeringProject.model_validate(project)
+
+    def test_example_uses_stabilized_contract_and_rejects_old_shape(self):
+        project = EngineeringProject.model_validate(example_payload())
+        self.assertEqual(project.schema_version, "1.1")
+        self.assertIsInstance(project.resources[0].capabilities[0], Capability)
+        self.assertIsInstance(project.resources[0].interfaces[0], AssetInterface)
+        self.assertIsInstance(project.process.operations[0].capability_requirements[0].constraints[0], Constraint)
+        with self.assertRaises(ValidationError):
+            EngineeringProject(id="p", schema_version="1.0")
+        with self.assertRaises(ValidationError):
+            CanonicalAsset(id="a", capabilities={"handling": {}})
 
 
 class PoseTests(unittest.TestCase):

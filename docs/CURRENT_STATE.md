@@ -9,7 +9,9 @@ Fortschreibung am 09.09.2026: Die neue Montage-Richtung wurde ausschließlich do
 
 Fortschreibung am 10.09.2026: Der Benutzer hat ausschließlich das Generic Data Model in Pydantic v2 zur Implementierung beauftragt. **IMPLEMENTED:** separates Paket `src/aied/models/` mit den generischen Core-Objekten einschließlich `MatchResult`, Datenzuständen, Quellen-/Geometriereferenzen, PPR-Kontext und Layout-Daten. Detailvertrag und Prüfgrenzen stehen in [GENERIC_DATA_MODEL.md](GENERIC_DATA_MODEL.md); ein synthetisches JSON-Beispiel liegt in `examples/generic_project.json`.
 
-Der vorhandene v0.1-Workflow und `src/aied/schemas.py` bleiben unverändert. Es gibt keine Anbindung des neuen Modells an Agent, Pipeline, CAD oder GUI und keine neuen Planner, Adapter, Matching- oder Layout-Algorithmen. `EngineeringProject.schema_version="1.0"` ist eine Datenvertragsversion, keine neue Anwendungsversion. Der vollständige Montageprototyp bleibt unimplementiert.
+Der vorhandene v0.1-Workflow und `src/aied/schemas.py` bleiben unverändert. Es gibt keine Anbindung des neuen Modells an Agent, Pipeline, CAD oder GUI und keine neuen Planner, Adapter, Matching- oder Layout-Algorithmen. `EngineeringProject.schema_version="1.1"` ist eine Datenvertragsversion, keine neue Anwendungsversion. Der vollständige Montageprototyp bleibt unimplementiert.
+
+Weitere Stabilisierung am 10.09.2026 auf ausdrücklichen Benutzerauftrag: **IMPLEMENTED:** eigenständige `Capability` mit offenen Typen und DataValue-Parametern; `Constraint` mit Property-/Semantic Reference, neun Operatoren, DataValue-Vergleichswert und hard/soft; generisches `AssetInterface`; optionale `DataValue.confidence` in 0.0–1.0. CanonicalAsset enthält jetzt Capability- und Interface-Listen. CapabilityRequirement und AssetRequirement enthalten Constraints. IDs werden innerhalb der jeweiligen neuen Listen auf Eindeutigkeit geprüft. Die Änderung der Capability-JSON-Struktur ist durch Datenvertragsversion `1.1` gekennzeichnet; keine automatische Migration alter generischer `1.0`-Dokumente. Keine Matching-Engine und keine Interface-Kompatibilitätsprüfung.
 
 ## Tatsächlicher Umfang
 
@@ -149,7 +151,13 @@ Der heutige Code enthält weiterhin keine industrielle Validation, Simulation od
 
 ## Verifikationsumfang
 
-Für die Generic-Data-Model-Erweiterung am 10.09.2026:
+Für die anschließende Stabilisierung am 10.09.2026:
+
+- `.venv\Scripts\python.exe -m unittest discover -s tests -v`: **33 Tests bestanden**, keine übersprungenen Tests, Laufzeit 16,600 s, Exitcode 0.
+- 28 Modelltests einschließlich aller neun Constraint-Operatoren, Operandformen, Property-/Semantic References, hard/soft, offener Capability-/Interface-Typen, Provenance, Confidence-Grenzen, neuer Listen-IDs und JSON-Roundtrips. Die fünf bestehenden Legacy-Tests blieben unverändert und bestanden einschließlich echter STEP-Erzeugung und STEP-Kopie mit gemocktem LLM.
+- `git diff --check` erfolgreich; keine Änderungen an Agents, Pipeline, GUI, CAD-Services, Prompts, Legacy-Schemas, `base.py` oder `spatial.py`. Keine GUI-/Live-LLM-Prüfung.
+
+Für die ursprüngliche Generic-Data-Model-Erweiterung am 10.09.2026:
 
 - `.venv\Scripts\python.exe -m unittest discover -s tests -v`: **26 Tests bestanden**, keine übersprungenen Tests, Laufzeit 6,389 s, Exitcode 0; Python 3.11.9 und Pydantic 2.13.5.
 - 21 Modelltests prüfen Datenzustände, JSON-Typen/Roundtrips, JSON-Schema-Erzeugung, Erweiterbarkeit, Referenzen, Stückzahlen, Posen, Revalidierung und einen von Workflow/CAD/GUI unabhängigen Import.

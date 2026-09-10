@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "id": "assembly-example",
   "name": "Synthetisches Datenmodell-Beispiel",
   "metadata": {
@@ -43,7 +43,17 @@
           {
             "id": "screwing-needed",
             "capability": "screwing",
-            "properties": {"torque": {"status": "unknown", "unit": "N*m"}}
+            "properties": {"torque": {"status": "unknown", "unit": "N*m"}},
+            "constraints": [
+              {
+                "id": "required-torque",
+                "property_ref": "torque",
+                "semantic_ref": "urn:example:torque",
+                "operator": "=",
+                "value": {"status": "unknown", "unit": "N*m"},
+                "strength": "hard"
+              }
+            ]
           }
         ]
       }
@@ -54,7 +64,34 @@
       "id": "tool-1",
       "name": "Beispiel-Schraubwerkzeug",
       "asset_type": "screwdriver",
-      "capabilities": {"screwing": {"torque": {"status": "unknown", "unit": "N*m"}}},
+      "capabilities": [
+        {
+          "id": "tool-screwing-capability",
+          "capability": "screwing",
+          "semantic_id": "urn:example:screwing",
+          "description": "Synthetische Capability ohne belegte Drehmomentdaten.",
+          "parameters": {"torque": {"status": "unknown", "unit": "N*m"}},
+          "sources": [{"id": "example-source", "kind": "example"}]
+        }
+      ],
+      "interfaces": [
+        {
+          "id": "tool-mount",
+          "interface_type": "mechanical",
+          "properties": {"mounting_pattern": {"status": "unknown"}}
+        },
+        {
+          "id": "tool-power",
+          "interface_type": "electrical",
+          "description": "Rein synthetischer Schätzwert, keine Herstellerspezifikation.",
+          "properties": {
+            "voltage": {
+              "status": "estimated", "value": 24, "unit": "V", "confidence": 0.6,
+              "sources": [{"id": "example-source", "kind": "example"}]
+            }
+          }
+        }
+      ],
       "sources": [{"id": "example-source", "kind": "example", "description": "Synthetischer Datensatz"}]
     }
   ],
@@ -67,7 +104,19 @@
           "id": "tool-needed",
           "role": "screwing_resource",
           "operation_ids": ["tighten-screws"],
-          "capability_requirements": [{"id": "tool-screwing", "capability": "screwing"}]
+          "capability_requirements": [{"id": "tool-screwing", "capability": "screwing"}],
+          "constraints": [
+            {
+              "id": "preferred-mass",
+              "property_ref": "mass",
+              "operator": "<=",
+              "value": {
+                "status": "estimated", "value": 2, "unit": "kg", "confidence": 0.5,
+                "description": "Synthetischer Wunschwert für dieses Datenbeispiel."
+              },
+              "strength": "soft"
+            }
+          ]
         }
       ],
       "resource_assignments": [

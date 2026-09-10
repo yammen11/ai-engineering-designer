@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Self
 
-from pydantic import Field, JsonValue, model_validator
+from pydantic import Field, JsonValue, StrictFloat, model_validator
 
 from .base import CoreModel, NonEmptyString
 
@@ -41,6 +41,7 @@ class DataValue(CoreModel):
     sources: list[SourceReference] = Field(default_factory=list)
     description: NonEmptyString | None = None
     derivation: NonEmptyString | None = None
+    confidence: StrictFloat | None = Field(default=None, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def validate_state(self) -> Self:
